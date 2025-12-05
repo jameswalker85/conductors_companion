@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Conductor's Companion</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <!-- Added marked.js for text formatting -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        /* Custom scrollbar for cleaner look */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        
+        /* Prose styles for the generated report */
+        .prose h1 { font-size: 1.5em; font-weight: bold; margin-bottom: 0.5em; line-height: 1.2; }
+        .prose h2 { font-size: 1.25em; font-weight: bold; margin-bottom: 0.5em; margin-top: 1em; }
+        .prose p { margin-bottom: 0.75em; line-height: 1.6; }
+        .prose strong { font-weight: bold; }
+        .prose em { font-style: italic; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- ICONS (SVG Components) ---
+        const Icons = {
+            Train: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="3" width="16" height="16" rx="2"/><path d="M4 11h16"/><path d="M12 3v8"/><path d="m8 19-2 3"/><path d="m18 22-2-3"/><circle cx="8" cy="15" r="1"/><circle cx="16" cy="15" r="1"/></svg>,
+            Sun: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41-1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>,
+            Moon: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>,
+            Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
+            X: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 18 18"/></svg>,
+            Undo: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>,
+            Crown: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/></svg>,
+            Home: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+            Ticket: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></svg>,
+            Mountain: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>,
+            Repeat: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>,
+            PlayCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>,
+            Loader2: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+            Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+            ArrowUp: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>,
+            ArrowDown: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
+            AlertTriangle: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>,
+            Star: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        };
+
+        // --- CONSTANTS ---
+        const PLAYER_COLOURS_STANDARD = {
+            blue:   { style: { backgroundColor: '#3b82f6', borderColor: '#3b82f6' }, text: 'text-white', ring: 'ring-blue-500' },
+            red:    { style: { backgroundColor: '#ef4444', borderColor: '#ef4444' }, text: 'text-white', ring: 'ring-red-500' },
+            green:  { style: { backgroundColor: '#22c55e', borderColor: '#22c55e' }, text: 'text-white', ring: 'ring-green-500' },
+            yellow: { style: { backgroundColor: '#facc15', borderColor: '#facc15' }, text: 'text-black', ring: 'ring-yellow-400' },
+            black:  { style: { backgroundColor: '#1f2937', borderColor: '#1f2937' }, text: 'text-white', ring: 'ring-gray-800' },
+        };
+
+        const PLAYER_COLOURS_ANNIVERSARY = {
+            blue:   { style: { backgroundColor: '#3b82f6', borderColor: '#3b82f6' }, text: 'text-white', ring: 'ring-blue-500' },
+            red:    { style: { backgroundColor: '#ef4444', borderColor: '#ef4444' }, text: 'text-white', ring: 'ring-red-500' },
+            brown:  { style: { backgroundColor: '#b66318', borderColor: '#b66318' }, text: 'text-white', ring: 'ring-amber-700' },
+            grey:   { style: { backgroundColor: '#9abdd2', borderColor: '#9abdd2' }, text: 'text-black', ring: 'ring-sky-400' },
+            purple: { style: { backgroundColor: '#db54a1', borderColor: '#db54a1' }, text: 'text-white', ring: 'ring-pink-500' },
+        };
+
+        const PLAYER_COLOURS_NORTHERN_LIGHTS = {
+            purple: { style: { backgroundColor: '#7d68c3', borderColor: '#7d68c3' }, text: 'text-white', ring: 'ring-purple-500' }, 
+            red:    { style: { backgroundColor: '#ef4444', borderColor: '#ef4444' }, text: 'text-white', ring: 'ring-red-500' },
+            white:  { style: { backgroundColor: '#FFFFFF', borderColor: '#CCCCCC' }, text: 'text-black', ring: 'ring-gray-300' },
+            yellow: { style: { backgroundColor: '#facc15', borderColor: '#facc15' }, text: 'text-black', ring: 'ring-yellow-400' },
+            black:  { style: { backgroundColor: '#1f2937', borderColor: '#1f2937' }, text: 'text-white', ring: 'ring-gray-800' },
+        };
+
+        const ROUTE_POINTS_STANDARD = { 1: 1, 2: 2, 3: 4, 4: 7, 5: 10, 6: 15 };
+        const ROUTE_POINTS_NORTHERN_LIGHTS = { 1: 1, 2: 2, 3: 4, 4: 7, 5: 10 };
+        const ROUTE_POINTS_EUROPE = { 1: 1, 2: 2, 3: 4, 4: 7, 6: 15, 8: 21 };
+        const ROUTE_POINTS_ITALY = { 1: 1, 2: 2, 3: 4, 4: 7, 5: 10, 6: 15, 7: 18 };
+        const MANDALA_POINTS = { 0: 0, 1: 5, 2: 10, 3: 20, 4: 30, 5: 40 };
+        const REGION_BONUS_POINTS = { 5: 1, 6: 2, 7: 4, 8: 7, 9: 11, 10: 16, 11: 22, 12: 29, 13: 37, 14: 46 };
+
+        const NORTHERN_LIGHTS_BONUSES = [
+            { id: 'A', name: 'Call of the Wild', points: 5, description: 'Most locomotives in hand.' },
+            { id: 'B', name: 'Capital Investment', points: 7, description: 'Most completed tickets to Stockholm, Copenhagen, Oslo & Helsinki.' },
+            { id: 'C', name: 'Cost Efficiency', points: 7, description: 'Most trains left.' },
+            { id: 'D', name: 'Small Steps Strategist', points: 10, description: 'Most one-space routes claimed.' },
+            { id: 'E', name: 'Nordic Express', points: 10, description: 'Longest continuous path.' },
+            { id: 'F', name: 'Local Network', points: 10, description: 'Most completed small tickets (value 5 or less).' },
+            { id: 'G', name: 'International Tycoon', points: 12, description: 'Most different countries connected.' },
+            { id: 'H', name: 'Polar Express', points: 12, description: 'Most completed tickets to at least one city in the Arctic Circle.' },
+            { id: 'I', name: 'Snowplow Award', points: 12, description: 'Most routes connecting at least one city in the Arctic Circle.' },
+            { id: 'J', name: 'Ferry Master', points: 12, description: 'Most ferry routes claimed.' },
+            { id: 'K', name: 'The Wild West', points: 7, description: 'Most routes connecting at least one Norwegian city.' },
+        ];
+
+        const INITIAL_TRAINS = 45;
+        const INITIAL_TRAINS_40 = 40;
+        const INITIAL_TRAINS_JAPAN = 20;
+        const INITIAL_STATIONS = 3;
+        const INITIAL_BULLET_TRAINS = 16;
+        const INITIAL_GAME_STATE = { players: [], status: 'setup', currentPlayerIndex: 0, history: [], lastRoundTriggered: false, finalRoundTriggererId: null, gameVersion: 'USA', bulletTrainPool: INITIAL_BULLET_TRAINS, useAnniversaryColours: false, globetrotterAwarded: false, activeBonusCards: [] };
+
+
+        // --- FLAG COMPONENTS ---
+        function UsaFlag() { return (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 20" className="w-12 h-8 rounded shadow"><rect width="28" height="20" fill="#BF0A30"/><path d="M0 3h28M0 7h28M0 11h28M0 15h28" stroke="#FFFFFF" strokeWidth="2"/><rect width="14" height="10" fill="#002868"/><g transform="translate(1.2 1) scale(1.2)">{[...Array(5)].map((_,r)=><g key={r} transform={`translate(0 ${r*2})`}>{[...Array(6)].map((_,c)=><g key={c} transform={`translate(${c*2}, 0)`}><path d="M.5.8L.2 1 .3.6 0 .35l.4-.05L.5 0l.1.3.4.05L.7.6l.1.4z" fill="white"/></g>)}</g>)}{[...Array(4)].map((_,r)=><g key={r} transform={`translate(1 ${r*2+1})`}>{[...Array(5)].map((_,c)=><g key={c} transform={`translate(${c*2}, 0)`}><path d="M.5.8L.2 1 .3.6 0 .35l.4-.05L.5 0l.1.3.4.05L.7.6l.1.4z" fill="white"/></g>)}</g>)}</g></svg>); }
+        function EuropeFlag() { return (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" className="w-12 h-8 rounded shadow"><rect width="30" height="20" fill="#003399"/><g transform="translate(15,10)">{[...Array(12)].map((_,i)=>(<g key={i} transform={`rotate(${i*30}) translate(0, -6)`}><path d="M0-1l.22.68h.72l-.58.42.22.68-.58-.42-.58.42.22-.68-.58-.42h.72z" fill="#FFCC00"/></g>))}</g></svg>); }
+        function JapanFlag() { return (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" className="w-12 h-8 rounded shadow"><rect width="30" height="20" fill="#FFFFFF" stroke="#dee2e6" strokeWidth=".5"/><circle cx="15" cy="10" r="6" fill="#BC002D"/></svg>); }
+        function AsiaLogo() { return (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" className="w-12 h-8 rounded shadow"><rect width="30" height="20" fill="#c00"/><path d="M 4 20 L 12 8 L 16 13 L 20 9 L 26 20 Z" fill="white"/></svg>); }
+        function SwitzerlandFlag() { return (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" className="w-12 h-8 rounded shadow"><rect width="20" height="20" fill="#FF0000"/><rect x="8" y="4" width="4" height="12" fill="#FFFFFF"/><rect x="4" y="8" width="12" height="4" fill="#FFFFFF"/></svg>); }
+        function IndiaFlag() { return (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" className="w-12 h-8 rounded shadow"><rect width="30" height="20" fill="#138808"/><rect width="30" height="13.33" fill="#FFFFFF"/><rect width="30" height="6.67" fill="#FF9933"/><circle cx="15" cy="10" r="2.5" fill="none" stroke="#000080" strokeWidth="0.5"/><g transform="translate(15,10)">{[...Array(24)].map((_,i)=>(<line key={i} x1="0" y1="0" x2="0" y2="2.5" transform={`rotate(${i*15})`} stroke="#000080" strokeWidth="0.2"/>))}</g></svg>); }
+        function AfricaFlag() { return (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" className="w-12 h-8 rounded shadow"><rect width="30" height="20" fill="#E0B50A"/><rect width="30" height="13.33" fill="#007A4D"/><rect width="30" height="6.67" fill="#CE1126"/><polygon points="0,0 10,10 0,20" fill="black"/></svg>); }
+        function ItalyFlag() { return (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" className="w-12 h-8 rounded shadow"><rect width="30" height="20" fill="#009246"/><rect width="20" height="20" fill="#FFFFFF"/><rect width="10" height="20" fill="#CE2B37"/></svg>); }
+        function NorthernLightsLogo() { return (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" className="w-12 h-8 rounded shadow"><rect width="30" height="20" fill="#002040"/><path d="M0 10 Q 7.5 5, 15 10 T 30 10" stroke="#34d399" fill="none" strokeWidth="3" strokeOpacity="0.7"/><path d="M0 12 Q 7.5 7, 15 12 T 30 12" stroke="#a7f3d0" fill="none" strokeWidth="2" strokeOpacity="0.7"/></svg>); }
+
+
+        // --- API HELPERS ---
+        const getApiKey = () => localStorage.getItem('gemini_api_key') || '';
+
+        const callGeminiApi = async (prompt) => {
+            const apiKey = getApiKey();
+            if (!apiKey) return "Please add your Gemini API Key in settings (Cog icon).";
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error?.message || response.statusText);
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response text.";
+            } catch (error) {
+                console.error("API Error:", error);
+                return `Error: ${error.message}`;
+            }
+        };
+
+        const callGeminiTtsApi = async (textPrompt) => {
+            const apiKey = getApiKey();
+            if (!apiKey) return null;
+            
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: textPrompt }] }],
+                        generationConfig: { responseModalities: ["AUDIO"] },
+                        model: "gemini-2.5-flash-preview-tts"
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error?.message || response.statusText);
+                
+                const part = data?.candidates?.[0]?.content?.parts?.[0];
+                if (part?.inlineData) return { audioData: part.inlineData.data, sampleRate: 24000 };
+                return null;
+            } catch (error) {
+                console.error("TTS API Error:", error);
+                return null;
+            }
+        };
+
+        // --- AUDIO UTILS ---
+        function base64ToArrayBuffer(base64) {
+            const binaryString = window.atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+            return bytes.buffer;
+        }
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
+        }
+        function pcmToWav(pcmData, sampleRate) {
+            const numChannels = 1; const bytesPerSample = 2; const blockAlign = numChannels * bytesPerSample;
+            const byteRate = sampleRate * blockAlign; const dataSize = pcmData.length * bytesPerSample;
+            const buffer = new ArrayBuffer(44 + dataSize); const view = new DataView(buffer);
+            writeString(view, 0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+            view.setUint16(22, numChannels, true); view.setUint32(24, sampleRate, true);
+            view.setUint32(28, byteRate, true); view.setUint16(32, blockAlign, true);
+            view.setUint16(34, bytesPerSample * 8, true); writeString(view, 36, 'data');
+            view.setUint32(40, dataSize, true);
+            let offset = 44;
+            for (let i = 0; i < pcmData.length; i++, offset += 2) view.setInt16(offset, pcmData[i], true);
+            return new Blob([view], { type: 'audio/wav' });
+        }
+
+        // --- APP COMPONENTS ---
+
+        function Modal({ title, children, onClose }) {
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 p-4">
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">{title}</h3>
+                        <div className="text-slate-600 dark:text-slate-300 mb-6">{children}</div>
+                        <button onClick={onClose} className="w-full bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">Close</button>
+                    </div>
+                </div>
+            );
+        }
+
+        function SettingsModal({ onClose }) {
+            const [key, setKey] = useState(getApiKey());
+            const save = () => { localStorage.setItem('gemini_api_key', key); onClose(); };
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 p-4">
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-xl max-w-md w-full">
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">App Settings</h3>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Gemini API Key (Optional)</label>
+                        <input type="password" value={key} onChange={e => setKey(e.target.value)} className="w-full p-2 border rounded mb-4 bg-gray-50 dark:bg-slate-700 dark:text-white" placeholder="Paste API Key here" />
+                        <p className="text-xs text-gray-500 mb-4">Required for AI Strategy Tips and Game Reports.</p>
+                        <button onClick={save} className="w-full bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Save & Close</button>
+                    </div>
+                </div>
+            );
+        }
+
+        function BonusCardModal({ selectedBonuses, onClose, onUpdate }) {
+            const [localSelection, setLocalSelection] = useState(selectedBonuses || []);
+            const handleToggle = (bonusId) => {
+                setLocalSelection(prev => prev.includes(bonusId) ? prev.filter(id => id !== bonusId) : (prev.length < 4 ? [...prev, bonusId] : prev));
+            };
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 p-4">
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-xl max-w-lg w-full">
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Select 4 Bonus Cards</h3>
+                        <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                            {NORTHERN_LIGHTS_BONUSES.map(bonus => {
+                                const isSelected = localSelection.includes(bonus.id);
+                                const isDisabled = !isSelected && localSelection.length >= 4;
+                                return (
+                                    <label key={bonus.id} className={`flex items-start gap-3 p-3 rounded-lg border-2 ${isSelected ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/50' : 'border-gray-200 dark:border-slate-600'} ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                                        <input type="checkbox" checked={isSelected} disabled={isDisabled} onChange={() => handleToggle(bonus.id)} className="h-5 w-5 rounded text-blue-500 mt-1"/>
+                                        <div><span className="font-semibold text-slate-700 dark:text-slate-200">{bonus.id} - {bonus.name} (+{bonus.points} pts)</span><p className="text-sm text-slate-500 dark:text-slate-400">{bonus.description}</p></div>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button onClick={onClose} className="bg-gray-200 dark:bg-slate-600 px-4 py-2 rounded">Cancel</button>
+                            <button onClick={() => { onUpdate(localSelection); onClose(); }} className="bg-blue-500 text-white px-4 py-2 rounded">Save</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function PlayerCard({ player, isCurrentPlayer, gameVersion, PLAYER_COLOURS }) {
+            const colour = PLAYER_COLOURS[player.colour] || PLAYER_COLOURS_STANDARD.black;
+            return (
+                <div className={`p-4 rounded-lg shadow-md ${isCurrentPlayer ? `ring-4 ring-offset-2 dark:ring-offset-gray-900 ${colour.ring}` : ''}`} style={colour.style}>
+                    <div className="flex justify-between items-center mb-2">
+                        <h3 className={`text-xl font-bold ${colour.text}`}>{player.name}</h3>
+                        <span className={`text-3xl font-black ${colour.text}`}>{player.score}</span>
+                    </div>
+                    <div className="flex justify-end items-center gap-4">
+                        {gameVersion === 'Europe' && (<div className="flex items-center gap-1"><Icons.Home className={`w-5 h-5 ${colour.text}`} /><span className={`text-lg font-bold ${colour.text}`}>{player.stations}</span></div>)}
+                        {gameVersion === 'Japan' && (<div className="flex items-center gap-1"><span className="text-lg">🚄</span><span className={`text-lg font-bold ${colour.text}`}>{player.bulletTrainContributions || 0}</span></div>)}
+                        <div className="flex items-center gap-1"><Icons.Train className={`w-5 h-5 ${colour.text}`} /><span className={`text-lg font-bold ${colour.text}`}>{player.trains}</span></div>
+                    </div>
+                </div>
+            );
+        }
+
+        function App() {
+            const [gameState, setGameState] = useState(() => {
+                const saved = localStorage.getItem('ttr_scorer_state');
+                return saved ? JSON.parse(saved) : INITIAL_GAME_STATE;
+            });
+            const [darkMode, setDarkMode] = useState(true);
+            const [showSettings, setShowSettings] = useState(false);
+
+            // Audio Ref
+            const audioRef = useRef(null);
+
+            useEffect(() => { document.documentElement.classList.toggle('dark', darkMode); }, [darkMode]);
+            useEffect(() => { localStorage.setItem('ttr_scorer_state', JSON.stringify(gameState)); }, [gameState]);
+
+            const updateGame = (updates) => setGameState(prev => ({ ...prev, ...updates }));
+
+            // Helper to play sounds
+            const playSound = async (type) => {
+                if(type === 'final') {
+                     // Using standard HTML5 Audio for the MP3
+                     // Added ?raw=true to the GitHub link to ensure it streams as audio
+                     const audio = new Audio("https://github.com/jameswalker85/conductors_companion/blob/main/trainwhistle.mp3?raw=true");
+                     audio.play().catch(e => console.log("Audio play error:", e));
+                } else if (type === 'fanfare') {
+                     // Using standard HTML5 Audio for the MP3
+                     const audio = new Audio("https://github.com/jameswalker85/conductors_companion/blob/main/endgame.mp3?raw=true");
+                     audio.play().catch(e => console.log("Audio play error:", e));
+                }
+            };
+
+            const renderContent = () => {
+                switch (gameState.status) {
+                    case 'setup': return <PlayerSetup gameState={gameState} updateGame={updateGame} />;
+                    case 'playing': return <GameScreen gameState={gameState} updateGame={updateGame} playSound={playSound} />;
+                    case 'final_scoring': return <FinalScoring gameState={gameState} updateGame={updateGame} />;
+                    case 'finished': return <GameFinished gameState={gameState} updateGame={updateGame} playSound={playSound} />;
+                    default: return <div>Invalid State</div>;
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-100 dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-300 pb-10">
+                    <header className="bg-slate-700 dark:bg-slate-800 text-white p-4 shadow-md sticky top-0 z-10">
+                        <div className="container mx-auto flex justify-between items-center">
+                            <div className="flex items-center gap-2"><Icons.Train /><h1 className="text-xl md:text-2xl font-bold">Conductor's Companion</h1></div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-slate-600"><Icons.Settings /></button>
+                                <button onClick={() => setDarkMode(!darkMode)} className="p-2 rounded-full hover:bg-slate-600">{darkMode ? <Icons.Sun /> : <Icons.Moon />}</button>
+                            </div>
+                        </div>
+                    </header>
+                    <main className="container mx-auto p-2 md:p-4">{renderContent()}</main>
+                    {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+                </div>
+            );
+        }
+
+        // --- SUB-COMPONENTS ---
+
+        function PlayerSetup({ gameState, updateGame }) {
+            const [newPlayerName, setNewPlayerName] = useState('');
+            const [strategyTips, setStrategyTips] = useState('');
+            const [isTipsLoading, setIsTipsLoading] = useState(false);
+            const { players, gameVersion, useAnniversaryColours } = gameState;
+
+            const activePlayerColours = useMemo(() => {
+                if (gameVersion === 'Europe' && useAnniversaryColours) return PLAYER_COLOURS_ANNIVERSARY;
+                if (gameVersion === 'NorthernLights') return PLAYER_COLOURS_NORTHERN_LIGHTS;
+                return PLAYER_COLOURS_STANDARD;
+            }, [gameVersion, useAnniversaryColours]);
+
+            const availableColours = useMemo(() => Object.keys(activePlayerColours).filter(c => !players.map(p => p.colour).includes(c)), [players, activePlayerColours]);
+            
+            const getInitialTrains = (v) => {
+                 if(v === 'Japan') return 20;
+                 if(v === 'Switzerland' || v === 'NorthernLights') return 40;
+                 return 45;
+            };
+
+            const handleGameVersionChange = (version) => {
+                const trainCount = getInitialTrains(version);
+                let updatedPlayers = players.map(p => ({ ...p, trains: trainCount }));
+                
+                // Reset colours if palette changes
+                const newPalette = (version === 'NorthernLights') ? PLAYER_COLOURS_NORTHERN_LIGHTS : 
+                                   (version === 'Europe' && useAnniversaryColours) ? PLAYER_COLOURS_ANNIVERSARY : PLAYER_COLOURS_STANDARD;
+                if(JSON.stringify(Object.keys(activePlayerColours)) !== JSON.stringify(Object.keys(newPalette))) {
+                    const keys = Object.keys(newPalette);
+                    updatedPlayers = updatedPlayers.map((p, i) => ({...p, colour: keys[i % keys.length]}));
+                }
+
+                updateGame({ gameVersion: version, players: updatedPlayers, activeBonusCards: [] });
+                setStrategyTips('');
+            };
+
+            const handleAddPlayer = (e) => {
+                e.preventDefault();
+                const maxPlayers = gameVersion === 'Switzerland' || gameVersion === 'Nordic' ? 3 : (gameVersion === 'India' ? 4 : 5);
+                if (newPlayerName.trim() && players.length < maxPlayers && availableColours.length > 0) {
+                    const newPlayer = {
+                        id: crypto.randomUUID(), name: newPlayerName.trim(), colour: availableColours[0],
+                        score: 0, trains: getInitialTrains(gameVersion), stations: 3, bulletTrainContributions: 0,
+                        finalScore: 0, completedTickets: Array(6).fill(0), incompleteTickets: Array(6).fill(0),
+                        longestRoute: false, asianExplorer: false, mandalas: 0, networks: [0], bonusesWon: []
+                    };
+                    updateGame({ players: [...players, newPlayer] });
+                    setNewPlayerName('');
+                }
+            };
+            
+            const handleTips = async () => {
+                setIsTipsLoading(true);
+                const prompt = gameVersion === 'Asia' 
+                    ? `Provide 3 concise strategy tips for Ticket to Ride: Legendary Asia (mountain routes). Format as a list.`
+                    : `Provide 3 concise strategy tips for Ticket to Ride: ${gameVersion}. Format as a list.`;
+                const tips = await callGeminiApi(prompt);
+                setStrategyTips(tips);
+                setIsTipsLoading(false);
+            };
+            
+            const movePlayer = (idx, dir) => {
+                 const newPlayers = [...players];
+                 const target = idx + dir;
+                 if(target >= 0 && target < newPlayers.length) {
+                     [newPlayers[idx], newPlayers[target]] = [newPlayers[target], newPlayers[idx]];
+                     updateGame({players: newPlayers});
+                 }
+            };
+
+            return (
+                <div className="max-w-3xl mx-auto bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg">
+                     <div className="mb-6">
+                        <label className="block text-lg font-semibold mb-2">Game Version</label>
+                        {/* UPDATED: Forced grid-cols-3 on all sizes (desktop & mobile). 
+                            Labels updated for 'Legendary Asia' and 'Switzerland'.
+                        */}
+                        <div className="grid grid-cols-3 gap-2">
+                            {[
+                                {id: 'USA', Flag: UsaFlag, name: 'USA'},
+                                {id: 'Europe', Flag: EuropeFlag, name: 'Europe'},
+                                {id: 'NorthernLights', Flag: NorthernLightsLogo, name: 'N. Lights'},
+                                {id: 'Asia', Flag: AsiaLogo, name: 'Legendary Asia'},
+                                {id: 'India', Flag: IndiaFlag, name: 'India'},
+                                {id: 'Switzerland', Flag: SwitzerlandFlag, name: 'Switzerland'},
+                                {id: 'Africa', Flag: AfricaFlag, name: 'Africa'},
+                                {id: 'Japan', Flag: JapanFlag, name: 'Japan'},
+                                {id: 'Italy', Flag: ItalyFlag, name: 'Italy'},
+                            ].map(map => (
+                                <button key={map.id} onClick={() => handleGameVersionChange(map.id)} 
+                                    className={`p-3 rounded-lg flex flex-col items-center border-2 transition-all ${gameState.gameVersion === map.id ? 'bg-blue-100 dark:bg-blue-900 border-blue-500' : 'bg-gray-50 dark:bg-slate-700 border-transparent'}`}>
+                                    <map.Flag />
+                                    {/* Added responsive text sizing and leading-tight for long names like Legendary Asia */}
+                                    <span className="font-bold text-xs md:text-sm mt-1 text-center leading-tight">{map.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                        {gameVersion === 'Europe' && (
+                            <label className="mt-4 flex items-center gap-2 justify-center text-sm font-medium">
+                                <input type="checkbox" checked={useAnniversaryColours} onChange={e => updateGame({ useAnniversaryColours: e.target.checked })} className="h-5 w-5 text-purple-600 rounded" /> Use Anniversary Colours
+                            </label>
+                        )}
+                    </div>
+                    
+                    <div className="mb-6">
+                         <button onClick={handleTips} disabled={isTipsLoading} className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow flex items-center justify-center gap-2 disabled:opacity-50">
+                            {isTipsLoading ? <Icons.Loader2 className="animate-spin" /> : '✨ Get AI Strategy Tips'}
+                         </button>
+                         {strategyTips && <div className="mt-3 p-3 bg-gray-50 dark:bg-slate-700 rounded text-sm whitespace-pre-wrap">{strategyTips}</div>}
+                    </div>
+
+                    <form onSubmit={handleAddPlayer} className="flex gap-2 mb-6">
+                        <input value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} placeholder="Player Name" className="flex-grow p-2 border rounded bg-gray-50 dark:bg-slate-700 dark:text-white dark:border-slate-600" />
+                        <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center gap-2"><Icons.Plus size={18}/> Add</button>
+                    </form>
+                    
+                    <div className="space-y-3">
+                        {players.map((p, i) => (
+                            <div key={p.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600">
+                                <div className="flex flex-col">
+                                    <button onClick={() => movePlayer(i, -1)} disabled={i===0} className="text-gray-500 hover:text-blue-500 disabled:opacity-20"><Icons.ArrowUp size={16}/></button>
+                                    <button onClick={() => movePlayer(i, 1)} disabled={i===players.length-1} className="text-gray-500 hover:text-blue-500 disabled:opacity-20"><Icons.ArrowDown size={16}/></button>
+                                </div>
+                                <span className="font-semibold flex-grow">{p.name}</span>
+                                <div className="flex gap-1">
+                                    {Object.keys(activePlayerColours).map(c => (
+                                        <button key={c} onClick={() => {
+                                            const updated = players.map(pl => pl.id === p.id ? {...pl, colour: c} : pl);
+                                            updateGame({players: updated});
+                                        }} className={`w-6 h-6 rounded-full ring-2 ring-offset-1 dark:ring-offset-slate-700 ${p.colour === c ? activePlayerColours[c].ring : 'ring-transparent'}`} style={activePlayerColours[c].style} />
+                                    ))}
+                                </div>
+                                <button onClick={() => updateGame({ players: players.filter(pl => pl.id !== p.id) })} className="text-red-500"><Icons.X size={20}/></button>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="mt-8 text-center">
+                        <button onClick={() => players.length >= 2 && updateGame({ status: 'playing' })} disabled={players.length < 2} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold text-lg disabled:opacity-50">Start Game</button>
+                    </div>
+                </div>
+            );
+        }
+
+        function GameScreen({ gameState, updateGame, playSound }) {
+            const { players, currentPlayerIndex, history, lastRoundTriggered, finalRoundTriggererId, gameVersion, bulletTrainPool } = gameState;
+            const [pending, setPending] = useState({ crosses: 0, double: false });
+            const [showModal, setShowModal] = useState(false);
+
+            // Move hooks to top
+            const safeIndex = players.length ? currentPlayerIndex % players.length : 0;
+            const currentPlayer = players[safeIndex];
+            const activePlayerColours = useMemo(() => {
+                if (gameVersion === 'Europe' && gameState.useAnniversaryColours) return PLAYER_COLOURS_ANNIVERSARY;
+                if (gameVersion === 'NorthernLights') return PLAYER_COLOURS_NORTHERN_LIGHTS;
+                return PLAYER_COLOURS_STANDARD;
+            }, [gameVersion, gameState.useAnniversaryColours]);
+
+            const triggerer = useMemo(() => players.find(p => p.id === finalRoundTriggererId)?.name, [finalRoundTriggererId, players]);
+
+            // Determine route points based on map
+            const routeTable = ['Europe', 'India'].includes(gameVersion) ? ROUTE_POINTS_EUROPE : 
+                               (gameVersion === 'Italy' ? ROUTE_POINTS_ITALY : 
+                               (gameVersion === 'NorthernLights' ? ROUTE_POINTS_NORTHERN_LIGHTS : ROUTE_POINTS_STANDARD));
+
+            const handleRoute = (len, pts) => setPending(prev => JSON.stringify(prev) === JSON.stringify({type:'route', len, pts}) ? {crosses:0, double:false} : {type:'route', len, pts, crosses:0, double:false});
+            const handleAction = (type, len) => setPending(prev => JSON.stringify(prev) === JSON.stringify({type, len}) ? {crosses:0, double:false} : {type, len, crosses:0, double:false});
+
+            const commit = () => {
+                let newPlayers = [...players];
+                let triggered = false;
+                let newPool = bulletTrainPool;
+                let roundTriggered = lastRoundTriggered;
+                let triggererId = finalRoundTriggererId;
+
+                if(pending.type === 'route') {
+                    const cost = pending.len + (pending.crosses||0);
+                    const pts = (pending.double && gameVersion === 'Africa' ? pending.pts * 2 : pending.pts) + (pending.crosses||0)*2;
+                    
+                    newPlayers = newPlayers.map(p => {
+                        if(p.id === currentPlayer.id) {
+                            const remaining = p.trains - cost;
+                            if(remaining <= 2 && !lastRoundTriggered) triggered = true;
+                            return { ...p, trains: remaining, score: p.score + pts };
+                        }
+                        return p;
+                    });
+                } else if (pending.type === 'bullet') {
+                    const cost = pending.len;
+                    newPlayers = newPlayers.map(p => p.id === currentPlayer.id ? {...p, bulletTrainContributions: (p.bulletTrainContributions||0) + cost} : p);
+                    newPool -= cost;
+                    // Bullets don't use player trains, but check trigger condition based on existing trains? 
+                    // Actually Japan rules say trigger happens when player has 0,1,2 trains. Bullets are separate. 
+                } else if (pending.type === 'station') {
+                    newPlayers = newPlayers.map(p => p.id === currentPlayer.id ? {...p, stations: p.stations - 1} : p);
+                }
+
+                if(triggered) {
+                    roundTriggered = true;
+                    triggererId = currentPlayer.id;
+                    setShowModal(true);
+                    playSound('final');
+                }
+
+                if(lastRoundTriggered && !triggered && currentPlayer.id === finalRoundTriggererId) {
+                    updateGame({ status: 'final_scoring', players: newPlayers, bulletTrainPool: newPool });
+                } else {
+                    updateGame({ 
+                        players: newPlayers, 
+                        bulletTrainPool: newPool, 
+                        currentPlayerIndex: (safeIndex + 1) % players.length,
+                        history: [...history, { ...pending, playerId: currentPlayer.id }],
+                        lastRoundTriggered: roundTriggered,
+                        finalRoundTriggererId: triggererId
+                    });
+                }
+                setPending({crosses: 0, double: false});
+            };
+
+            if(!currentPlayer) return <div>Loading...</div>;
+            
+            const colorTheme = activePlayerColours[currentPlayer.colour];
+            const requiredTrains = (pending.type === 'route') ? pending.len + (pending.crosses || 0) : 0;
+            const canAfford = pending.type === 'route' ? currentPlayer.trains >= requiredTrains : (pending.type === 'bullet' ? bulletTrainPool >= pending.len : true);
+
+            return (
+                <div className="space-y-4">
+                    {showModal && <Modal title="Final Round!" onClose={() => setShowModal(false)}>{triggerer} has triggered the final round!</Modal>}
+                    {lastRoundTriggered && <div className="p-3 text-center bg-red-500 text-white font-bold rounded animate-pulse">FINAL ROUND</div>}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {players.map((p, i) => (
+                            <div key={p.id} className={`p-4 rounded-lg shadow-md bg-white dark:bg-slate-800 border-t-4 ${i === safeIndex ? `ring-4 ring-offset-2 dark:ring-offset-gray-900 ${activePlayerColours[p.colour].ring}` : ''}`} style={{borderColor: activePlayerColours[p.colour].style.backgroundColor}}>
+                                <div className="flex justify-between"><span className="text-xl font-bold">{p.name}</span><span className="text-2xl font-black">{p.score}</span></div>
+                                <div className="flex justify-end gap-4 mt-2 text-sm font-medium text-gray-600 dark:text-gray-300">
+                                    {gameVersion === 'Japan' && <span>🚄 {p.bulletTrainContributions}</span>}
+                                    <span>🚂 {p.trains}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg">
+                        <h2 className="text-xl font-bold mb-4 text-center" style={{color: colorTheme.style.backgroundColor}}>{currentPlayer.name}'s Turn</h2>
+                        <div className="flex flex-wrap justify-center gap-3 mb-6">
+                            {Object.entries(routeTable).map(([len, pts]) => (
+                                <button key={len} onClick={() => handleRoute(parseInt(len), pts)} disabled={currentPlayer.trains < parseInt(len)} 
+                                    className={`p-4 rounded-lg text-center transition-all ${pending.type==='route' && pending.len===parseInt(len) ? 'ring-4 ring-yellow-400 bg-slate-600 text-white' : 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600'} disabled:opacity-30`}>
+                                    <div className="font-bold text-lg">{len} 🚂</div>
+                                    <div className="text-xs text-yellow-600 dark:text-yellow-400">+{pts} pts</div>
+                                </button>
+                            ))}
+                            {gameVersion === 'Europe' && <button onClick={() => handleAction('station')} className={`p-4 rounded-lg ${pending.type==='station' ? 'ring-4 ring-yellow-400 bg-purple-600 text-white' : 'bg-purple-100 text-purple-800'}`}><Icons.Home/> Stn</button>}
+                            {gameVersion === 'Japan' && [1,2,3,4].map(l => (
+                                <button key={`b${l}`} onClick={() => handleAction('bullet', l)} disabled={bulletTrainPool < l} className={`p-4 rounded-lg ${pending.type==='bullet' && pending.len===l ? 'ring-4 ring-yellow-400 bg-teal-600 text-white' : 'bg-teal-100 text-teal-800'} disabled:opacity-30`}>
+                                    <div className="font-bold">🚄 {l}</div>
+                                </button>
+                            ))}
+                             <button onClick={() => handleAction('draw')} className={`p-4 rounded-lg flex flex-col items-center ${pending.type==='draw' ? 'ring-4 ring-yellow-400 bg-green-600 text-white' : 'bg-green-100 text-green-800'}`}>
+                                <Icons.Ticket size={20}/><span className="text-xs font-bold">Draw</span>
+                            </button>
+                        </div>
+
+                        {/* Map Specific Controls */}
+                        {gameVersion === 'Asia' && pending.type === 'route' && (
+                            <div className="flex justify-center gap-3 border-t pt-4 mb-4">
+                                <button onClick={() => setPending(p => ({...p, crosses: p.crosses === 1 ? 0 : 1}))} className={`p-3 rounded ${pending.crosses===1 ? 'bg-gray-600 text-white' : 'bg-gray-200 text-black'}`}><Icons.Mountain size={16}/> 1 X (+2)</button>
+                                <button onClick={() => setPending(p => ({...p, crosses: p.crosses === 2 ? 0 : 2}))} className={`p-3 rounded ${pending.crosses===2 ? 'bg-gray-600 text-white' : 'bg-gray-200 text-black'}`}><Icons.Mountain size={16}/> 2 X (+4)</button>
+                            </div>
+                        )}
+                         {gameVersion === 'Africa' && pending.type === 'route' && (
+                             <div className="flex justify-center gap-3 border-t pt-4 mb-4">
+                                <button onClick={() => setPending(p => ({...p, double: !p.double}))} className={`p-3 rounded flex gap-2 items-center ${pending.double ? 'bg-orange-500 text-white' : 'bg-orange-100 text-orange-800'}`}><Icons.Repeat size={16}/> Double Points</button>
+                            </div>
+                        )}
+
+                        <div className="flex gap-4">
+                            <button onClick={commit} disabled={!pending.type || !canAfford} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed">Next Player</button>
+                            {/* Undo logic omitted for single-file brevity, can just use manual end game if mistakes made */}
+                        </div>
+                    </div>
+                    <div className="text-center mt-8">
+                         <button onClick={() => updateGame({status: 'final_scoring', players: players.map(p => ({...p, finalScore: p.score}))})} className="text-red-500 hover:underline">End Game Manually</button>
+                    </div>
+                </div>
+            );
+        }
+
+        function FinalScoring({ gameState, updateGame }) {
+            const { players, gameVersion, useAnniversaryColours, globetrotterAwarded, activeBonusCards } = gameState;
+            const [showBonusModal, setShowBonusModal] = useState(false);
+            const [refresh, setRefresh] = useState(0); // Force re-render for score updates
+            
+            const activePlayerColours = useMemo(() => {
+                if (gameVersion === 'Europe' && useAnniversaryColours) return PLAYER_COLOURS_ANNIVERSARY;
+                if (gameVersion === 'NorthernLights') return PLAYER_COLOURS_NORTHERN_LIGHTS;
+                return PLAYER_COLOURS_STANDARD;
+            }, [gameVersion]);
+
+            const calculateScore = (p, globeBonus = 0) => {
+                let s = p.score;
+                s += (p.completedTickets || []).reduce((a,b) => a+b, 0);
+                s -= (p.incompleteTickets || []).reduce((a,b) => a+b, 0);
+                if(gameVersion === 'Asia' && p.asianExplorer) s+= 10;
+                else if(['USA', 'Europe', 'Switzerland', 'India', 'Africa'].includes(gameVersion) && p.longestRoute) s+=10;
+                if(gameVersion === 'Europe') s+= (p.stations||0) * 4;
+                if(gameVersion === 'India') s += MANDALA_POINTS[Math.min(p.mandalas||0, 5)];
+                if(gameVersion === 'Italy') (p.networks||[]).forEach(n => s += (n>=15 ? 56 : (REGION_BONUS_POINTS[n]||0)));
+                if(gameVersion === 'NorthernLights') (p.bonusesWon||[]).forEach(bid => {
+                    const b = NORTHERN_LIGHTS_BONUSES.find(x => x.id === bid);
+                    if(b) s += b.points;
+                });
+                return s + globeBonus;
+            };
+
+            // Calculate winner for Globetrotter
+            const getGlobetrotterWinners = () => {
+                const max = Math.max(...players.map(p => p.completedTickets.filter(t => t>0).length));
+                if(max === 0) return [];
+                return players.filter(p => p.completedTickets.filter(t => t>0).length === max).map(p => p.id);
+            };
+            const globetrotterWinners = getGlobetrotterWinners();
+            const globeBonusVal = gameVersion === 'Africa' || gameVersion === 'Nordic' ? 10 : 15; // Nordic/Africa = 10, others 15
+
+            const updatePlayer = (id, data) => {
+                const updated = players.map(p => p.id === id ? {...p, ...data} : p);
+                // Recalc final scores
+                const final = updated.map(p => ({...p, finalScore: calculateScore(p, (globetrotterAwarded && globetrotterWinners.includes(p.id)) ? globeBonusVal : 0)}));
+                updateGame({ players: final, globetrotterAwarded: globetrotterAwarded }); // Keep globe status
+                setRefresh(r => r+1);
+            };
+
+            const toggleGlobe = () => {
+                const awarding = !globetrotterAwarded;
+                const final = players.map(p => ({...p, finalScore: calculateScore(p, (awarding && globetrotterWinners.includes(p.id)) ? globeBonusVal : 0)}));
+                updateGame({ players: final, globetrotterAwarded: awarding });
+            };
+            
+            const handleFinish = () => {
+                // Apply Japan Bonus
+                if(gameVersion === 'Japan') {
+                     const maxC = Math.max(...players.map(p => p.bulletTrainContributions||0));
+                     const winners = players.filter(p => (p.bulletTrainContributions||0) === maxC && maxC > 0);
+                     const final = players.map(p => ({
+                         ...p, 
+                         finalScore: calculateScore(p) + (winners.some(w => w.id === p.id) ? 15 : 0)
+                     }));
+                     updateGame({ players: final, status: 'finished' });
+                } else {
+                     updateGame({ status: 'finished' });
+                }
+            };
+
+            return (
+                <div className="max-w-4xl mx-auto bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg pb-20">
+                    <h2 className="text-3xl font-bold mb-6 text-center">Final Scoring</h2>
+                    
+                    {gameVersion === 'NorthernLights' && (
+                        <div className="mb-6 p-4 bg-blue-50 dark:bg-slate-700 rounded-lg text-center">
+                            <button onClick={() => setShowBonusModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Select In-Play Bonus Cards ({activeBonusCards.length}/4)</button>
+                            {showBonusModal && <BonusCardModal selectedBonuses={activeBonusCards} onClose={()=>setShowBonusModal(false)} onUpdate={ids => updateGame({activeBonusCards: ids})} />}
+                        </div>
+                    )}
+
+                    <div className="space-y-8">
+                        {players.map(p => {
+                            const color = activePlayerColours[p.colour];
+                            return (
+                                <div key={p.id} className="border-l-8 pl-4 py-2" style={{borderColor: color.style.backgroundColor}}>
+                                    <div className="flex justify-between items-end mb-2">
+                                        <h3 className="text-2xl font-bold">{p.name}</h3>
+                                        <div className="text-right"><div className="text-xs uppercase tracking-wide opacity-70">Route Score</div><div className="text-xl font-bold">{p.score}</div></div>
+                                    </div>
+
+                                    {/* Tickets */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label className="text-xs font-bold text-green-600 uppercase">Completed Tickets (+)</label>
+                                            <div className="flex flex-wrap gap-2 mt-1">
+                                                {p.completedTickets.map((v, i) => (
+                                                    <input key={i} type="number" min="0" value={v||''} placeholder="0" className="w-14 p-1 border rounded text-center bg-green-50 dark:bg-slate-700 dark:border-slate-600" 
+                                                        onChange={e => updatePlayer(p.id, { completedTickets: p.completedTickets.map((x, idx) => idx===i ? parseInt(e.target.value)||0 : x) })} />
+                                                ))}
+                                                <button onClick={() => updatePlayer(p.id, {completedTickets: [...p.completedTickets, 0]})} className="w-8 h-8 bg-gray-200 dark:bg-slate-600 rounded flex items-center justify-center"><Icons.Plus size={16}/></button>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-red-600 uppercase">Incomplete Tickets (-)</label>
+                                            <div className="flex flex-wrap gap-2 mt-1">
+                                                {p.incompleteTickets.map((v, i) => (
+                                                    <input key={i} type="number" min="0" value={v||''} placeholder="0" className="w-14 p-1 border rounded text-center bg-red-50 dark:bg-slate-700 dark:border-slate-600" 
+                                                        onChange={e => updatePlayer(p.id, { incompleteTickets: p.incompleteTickets.map((x, idx) => idx===i ? parseInt(e.target.value)||0 : x) })} />
+                                                ))}
+                                                <button onClick={() => updatePlayer(p.id, {incompleteTickets: [...p.incompleteTickets, 0]})} className="w-8 h-8 bg-gray-200 dark:bg-slate-600 rounded flex items-center justify-center"><Icons.Plus size={16}/></button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Special Inputs */}
+                                    <div className="flex flex-wrap gap-4 items-center bg-gray-50 dark:bg-slate-700/50 p-3 rounded">
+                                        {['USA', 'Europe', 'Switzerland', 'India', 'Africa'].includes(gameVersion) && (
+                                            <label className="flex items-center gap-2 cursor-pointer select-none"><input type="checkbox" checked={p.longestRoute} onChange={e => updatePlayer(p.id, {longestRoute: e.target.checked})} className="w-5 h-5 accent-yellow-500"/> {gameVersion === 'India' ? 'Indian Express' : 'Longest Path'} (+10)</label>
+                                        )}
+                                        {gameVersion === 'Asia' && (
+                                            <label className="flex items-center gap-2 cursor-pointer select-none"><input type="checkbox" checked={p.asianExplorer} onChange={e => updatePlayer(p.id, {asianExplorer: e.target.checked})} className="w-5 h-5 accent-yellow-500"/> Asian Explorer (+10)</label>
+                                        )}
+                                        {gameVersion === 'Europe' && (
+                                            <div className="flex items-center gap-2"><span>Stations Kept:</span><input type="number" min="0" max="3" value={p.stations} onChange={e => updatePlayer(p.id, {stations: parseInt(e.target.value)})} className="w-12 p-1 border rounded text-center dark:bg-slate-700"/> <span className="text-xs opacity-70">(x4 pts)</span></div>
+                                        )}
+                                        {gameVersion === 'India' && (
+                                            <div className="flex gap-1 items-center"><span className="text-sm mr-2">Mandalas:</span> {[0,1,2,3,4,5].map(n => (
+                                                <button key={n} onClick={() => updatePlayer(p.id, {mandalas: n})} className={`px-2 py-1 rounded text-xs font-bold ${p.mandalas===n ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-slate-600'}`}>{n===5 ? '5+' : n}</button>
+                                            ))}</div>
+                                        )}
+                                        {gameVersion === 'Italy' && (
+                                             <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-sm">Regions:</span>
+                                                {(p.networks||[0]).map((n, i) => (
+                                                    <input key={i} type="number" value={n} onChange={e => updatePlayer(p.id, {networks: p.networks.map((v, idx) => idx===i ? parseInt(e.target.value)||0 : v)})} className="w-12 p-1 border rounded text-center dark:bg-slate-700"/>
+                                                ))}
+                                                <button onClick={() => updatePlayer(p.id, {networks: [...p.networks, 0]})} className="w-6 h-6 bg-gray-200 dark:bg-slate-600 rounded flex items-center justify-center"><Icons.Plus size={12}/></button>
+                                             </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Northern Lights Bonuses */}
+                                    {gameVersion === 'NorthernLights' && activeBonusCards.length > 0 && (
+                                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {activeBonusCards.map(bid => {
+                                                const b = NORTHERN_LIGHTS_BONUSES.find(x => x.id === bid);
+                                                return (
+                                                    <label key={bid} className="flex items-center gap-2 text-sm cursor-pointer">
+                                                        <input type="checkbox" checked={(p.bonusesWon||[]).includes(bid)} 
+                                                            onChange={() => {
+                                                                const newBonuses = (p.bonusesWon||[]).includes(bid) ? p.bonusesWon.filter(x => x!==bid) : [...(p.bonusesWon||[]), bid];
+                                                                updatePlayer(p.id, {bonusesWon: newBonuses});
+                                                            }}
+                                                            className="w-4 h-4 accent-blue-500" />
+                                                        {b.id} - {b.name} (+{b.points})
+                                                    </label>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+
+                                    <div className="text-right mt-2 text-3xl font-black">{p.finalScore}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Global Bonuses */}
+                    {['USA', 'Europe', 'Africa'].includes(gameVersion) && (
+                        <div className="mt-8 text-center">
+                            <button onClick={toggleGlobe} className={`px-6 py-3 rounded-lg font-bold transition-colors ${globetrotterAwarded ? 'bg-green-600 text-white' : 'bg-yellow-400 text-black hover:bg-yellow-500'}`}>
+                                {globetrotterAwarded ? 'Globetrotter Applied' : `Award Globetrotter (+${gameVersion==='Africa'?10:15})`}
+                            </button>
+                        </div>
+                    )}
+
+                    <button onClick={handleFinish} className="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-lg font-bold text-xl shadow-lg">See Final Results</button>
+                </div>
+            );
+        }
+
+        function GameFinished({ gameState, updateGame, playSound }) {
+            const { players, gameVersion, useAnniversaryColours } = gameState;
+            const activePlayerColours = useMemo(() => {
+                if (gameVersion === 'Europe' && useAnniversaryColours) return PLAYER_COLOURS_ANNIVERSARY;
+                if (gameVersion === 'NorthernLights') return PLAYER_COLOURS_NORTHERN_LIGHTS;
+                return PLAYER_COLOURS_STANDARD;
+            }, [gameVersion]);
+            
+            const sorted = [...players].sort((a,b) => b.finalScore - a.finalScore);
+            const winner = sorted[0];
+            
+            const [report, setReport] = useState('');
+            const [loadingReport, setLoadingReport] = useState(false);
+            const [audioUrl, setAudioUrl] = useState(null);
+            const [loadingAudio, setLoadingAudio] = useState(false);
+            const audioRef = useRef(null);
+            
+            useEffect(() => { playSound('fanfare'); }, []);
+
+            const generateReport = async () => {
+                setLoadingReport(true);
+                const prompt = `Write a dramatic, 1920s newspaper style report (max 100 words) for a Ticket to Ride game. Map: ${gameVersion}. Winner: ${winner.name} (${winner.finalScore} pts). Runners up: ${sorted.slice(1).map(p=>p.name).join(', ')}. Mention any specific bonuses. Format using Markdown (e.g. # for headline, ** for bold).`;
+                const text = await callGeminiApi(prompt);
+                setReport(text);
+                setLoadingReport(false);
+            };
+
+            const readReport = async () => {
+                if(!report) return;
+                setLoadingAudio(true);
+                const res = await callGeminiTtsApi(report);
+                if(res) {
+                     const wav = pcmToWav(new Int16Array(base64ToArrayBuffer(res.audioData)), res.sampleRate);
+                     setAudioUrl(URL.createObjectURL(wav));
+                }
+                setLoadingAudio(false);
+            };
+
+            return (
+                <div className="max-w-xl mx-auto bg-white dark:bg-slate-800 p-8 rounded-lg shadow-xl text-center">
+                    <div className="mb-6"><Icons.Crown className="w-16 h-16 text-yellow-500 mx-auto mb-2"/> <h2 className="text-4xl font-black text-slate-800 dark:text-white">Game Over!</h2></div>
+                    <div className="text-2xl mb-8">Winner: <span className="font-bold text-blue-600 dark:text-blue-400">{winner.name}</span></div>
+                    
+                    <div className="space-y-3 mb-8">
+                        {sorted.map((p, i) => (
+                            <div key={p.id} className={`flex justify-between items-center p-3 rounded ${i===0 ? 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-500' : 'bg-gray-100 dark:bg-slate-700'}`}>
+                                <div className="flex items-center gap-3">
+                                    <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm`} style={{backgroundColor: activePlayerColours[p.colour].style.backgroundColor}}>{i+1}</span>
+                                    <span className="font-semibold">{p.name}</span>
+                                </div>
+                                <span className="font-bold text-xl">{p.finalScore}</span>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="border-t border-gray-200 dark:border-gray-700 pt-6 mb-6">
+                        {!report ? (
+                            <button onClick={generateReport} disabled={loadingReport} className="text-purple-600 hover:underline flex items-center justify-center gap-2 w-full">
+                                {loadingReport ? <Icons.Loader2 className="animate-spin"/> : <><Icons.Star size={16}/> Generate Game Report</>}
+                            </button>
+                        ) : (
+                            <div className="text-left bg-gray-50 dark:bg-slate-700 p-4 rounded italic text-sm text-gray-700 dark:text-gray-300">
+                                <div className="prose dark:prose-invert" dangerouslySetInnerHTML={{ __html: window.marked.parse(report) }} />
+                                <div className="mt-3 border-t pt-2 flex justify-center">
+                                     {!audioUrl ? (
+                                         <button onClick={readReport} disabled={loadingAudio} className="flex items-center gap-2 text-blue-500 hover:text-blue-600">
+                                            {loadingAudio ? <Icons.Loader2 className="animate-spin"/> : <><Icons.PlayCircle size={20}/> Read Aloud</>}
+                                         </button>
+                                     ) : (
+                                         <audio ref={audioRef} controls src={audioUrl} autoPlay className="w-full h-8" />
+                                     )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <button onClick={() => updateGame(INITIAL_GAME_STATE)} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold">New Game</button>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
